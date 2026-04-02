@@ -1,0 +1,72 @@
+version: "3.8"
+
+# =============================================================================
+# Docker RAG - Servicios de Infraestructura
+# =============================================================================
+# Estos servicios corren en Docker. El backend (FastAPI + LangChain)
+# corre LOCAL en un venv de Python.
+#
+# Sin GPU:    docker compose up -d
+# Con GPU:    docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# Detener:    docker compose down
+# Reset:      docker compose down -v  (elimina datos persistentes)
+# =============================================================================
+
+services:
+  # ============================================
+  # Ollama — LLM y Embeddings locales
+  # ============================================
+  # Por defecto corre en CPU. Si tenés GPU NVIDIA,
+  # usá docker-compose.gpu.yml como override (ver README).
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag-ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  # ============================================
+  # ChromaDB — Base de datos vectorial (persistente)
+  # ============================================
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: rag-chromadb
+    ports:
+      - "${CHROMA_PORT:-8000}:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
+
+  # ============================================
+  # OpenWebUI — Frontend conversacional
+  # ============================================
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: rag-openwebui
+    ports:
+      - "${WEBUI_PORT:-3000}:8080"
+    volumes:
+      - openwebui_data:/app/backend/data
+    environment:
+      # Ollama dentro de Docker
+      - OLLAMA_BASE_URL=http://ollama:11434
+      # Backend RAG corre LOCAL (host), accedemos con host.docker.internal
+      - OPENAI_API_BASE_URLS=http://host.docker.internal:${BACKEND_PORT:-8080}/v1
+      - OPENAI_API_KEYS=sk-dummy-key
+      - WEBUI_AUTH=false
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+    name: rag_ollama_data
+  chroma_data:
+    name: rag_chroma_data
+  openwebui_data:
+    name: rag_openwebui_data

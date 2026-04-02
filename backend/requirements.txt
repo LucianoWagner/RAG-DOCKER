@@ -1,0 +1,41 @@
+# =============================================================================
+# Backend RAG - Dependencias Python
+# =============================================================================
+# Se instala en un venv local: pip install -r requirements.txt
+# Compatible con Python 3.11+
+# =============================================================================
+
+# --- Framework Web ---
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.34.0,<1.0.0
+python-dotenv>=1.0.0,<2.0.0
+pydantic>=2.10.0,<3.0.0
+pydantic-settings>=2.7.0,<3.0.0
+
+# --- LangChain Core ---
+langchain>=0.3.14
+langchain-community>=0.3.14
+langchain-core>=0.3.30
+langchain-text-splitters>=0.3.0
+
+# --- LLM & Embeddings (Ollama) ---
+langchain-ollama>=0.3.0
+
+# --- Vector Store (ChromaDB) ---
+langchain-chroma>=0.2.2
+chromadb>=0.6.3
+
+# --- BM25 (búsqueda léxica) ---
+rank-bm25>=0.2.2
+
+# --- Reranking ---
+flashrank>=0.2.9
+
+# --- Evaluación (LLM-as-Judge, sin RAGAS) ---
+# Usamos evaluación custom con el propio LLM de Ollama como juez.
+# Ver evaluation/metrics.py para detalles.
+
+# --- Utilidades ---
+httpx>=0.28.0
+loguru>=0.7.3
+pytest>=9.0.0

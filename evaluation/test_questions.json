@@ -1,0 +1,82 @@
+[
+  {
+    "id": "q01",
+    "question": "¿Cómo instalo Docker Desktop en Windows 11?",
+    "category": "installation",
+    "platform": "windows",
+    "expected_behavior": "respond",
+    "expected_sources": ["desktop/install/windows.md"]
+  },
+  {
+    "id": "q02",
+    "question": "What are the system requirements for Docker Desktop on Mac?",
+    "category": "installation",
+    "platform": "mac",
+    "expected_behavior": "respond",
+    "expected_sources": ["desktop/install/mac.md"]
+  },
+  {
+    "id": "q03",
+    "question": "How do I install Docker Engine on Ubuntu?",
+    "category": "installation",
+    "platform": "linux",
+    "expected_behavior": "respond",
+    "expected_sources": ["engine/install/ubuntu.md"]
+  },
+  {
+    "id": "q04",
+    "question": "¿Cuál es la diferencia entre una imagen y un contenedor?",
+    "category": "getting_started",
+    "platform": "general",
+    "expected_behavior": "respond",
+    "expected_sources": ["get-started/"]
+  },
+  {
+    "id": "q05",
+    "question": "How do I run an nginx container and expose port 80?",
+    "category": "getting_started",
+    "platform": "general",
+    "expected_behavior": "respond",
+    "expected_sources": ["get-started/", "cli/"]
+  },
+  {
+    "id": "q06",
+    "question": "Docker Desktop no inicia después de actualizar Windows. ¿Qué puedo hacer?",
+    "category": "troubleshooting",
+    "platform": "windows",
+    "expected_behavior": "respond",
+    "expected_sources": ["desktop/troubleshoot/"]
+  },
+  {
+    "id": "q07",
+    "question": "Error: Cannot connect to the Docker daemon. Is the docker daemon running?",
+    "category": "troubleshooting",
+    "platform": "general",
+    "expected_behavior": "respond",
+    "expected_sources": ["engine/daemon/", "desktop/troubleshoot/"]
+  },
+  {
+    "id": "q08",
+    "question": "¿Cómo configuro Kubernetes con Docker?",
+    "category": "out_of_scope",
+    "platform": "general",
+    "expected_behavior": "abstain",
+    "expected_sources": []
+  },
+  {
+    "id": "q09",
+    "question": "Docker no funciona",
+    "category": "ambiguous",
+    "platform": "general",
+    "expected_behavior": "clarify_or_partial",
+    "expected_sources": []
+  },
+  {
+    "id": "q10",
+    "question": "What does docker compose up do?",
+    "category": "cli_reference",
+    "platform": "general",
+    "expected_behavior": "respond",
+    "expected_sources": ["cli/"]
+  }
+]
