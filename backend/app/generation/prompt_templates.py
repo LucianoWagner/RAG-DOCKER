@@ -89,19 +89,26 @@ def format_context(chunks: list) -> str:
 
     Returns:
         Texto formateado con los fragmentos numerados.
-
-    TODO: Implementar
-    - Para cada chunk, formatear como:
-      [Fuente N]
-      Documento: {doc_title}
-      Sección: {section_header}
-      ---
-      {page_content}
-      ---
-    - Numerar secuencialmente
     """
-    # TODO: Implementar
-    return ""
+    formatted_chunks = []
+    for i, chunk in enumerate(chunks):
+        # LangChain LLMs / Generadores asumen índice desde 1 para las fuentes (1-indexed para humanos)
+        n = i + 1
+        meta = chunk.metadata
+        title = meta.get("doc_title", "Documentación")
+        section = meta.get("section_header", "General")
+        
+        chunk_str = (
+            f"[Fuente {n}]\n"
+            f"Documento: {title}\n"
+            f"Sección: {section}\n"
+            f"---\n"
+            f"{chunk.page_content}\n"
+            f"---"
+        )
+        formatted_chunks.append(chunk_str)
+        
+    return "\n\n".join(formatted_chunks)
 
 
 def build_messages(question: str, context: str, system_prompt: str = SYSTEM_PROMPT) -> list[dict]:
@@ -115,13 +122,14 @@ def build_messages(question: str, context: str, system_prompt: str = SYSTEM_PROM
 
     Returns:
         Lista de dicts con role/content para el LLM.
-
-    TODO: Implementar
-    - Retornar:
-      [
-        {"role": "system", "content": system_prompt.format(context=context)},
-        {"role": "user", "content": USER_PROMPT.format(question=question)}
-      ]
     """
-    # TODO: Implementar
-    return []
+    return [
+        {
+            "role": "system", 
+            "content": system_prompt.format(context=context)
+        },
+        {
+            "role": "user", 
+            "content": USER_PROMPT.format(question=question)
+        }
+    ]

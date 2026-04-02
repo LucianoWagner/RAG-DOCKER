@@ -58,14 +58,63 @@ def check_evidence(
     settings = get_settings()
     logger.info(f"Evaluando evidencia para: {query[:50]}...")
 
-    # TODO: Implementar evaluación multi-señal
+    if not reranked_chunks:
+        return EvidenceResult(
+            verdict=EvidenceVerdict.INSUFFICIENT,
+            top_score=0.0,
+            relevant_count=0,
+            details="No se encontraron documentos recuperados."
+        )
 
-    # Placeholder: siempre dice suficiente
+    # El reranker ya los ordenó, así que el primero es el mejor
+    top_chunk = reranked_chunks[0]
+    top_score = top_chunk.metadata.get("rerank_score", 0.0)
+
+    # Contar cuántos chunks superan el umbral mínimo de relevancia
+    relevant_chunks = [c for c in reranked_chunks if c.metadata.get("rerank_score", 0.0) >= settings.relevance_threshold]
+    relevant_count = len(relevant_chunks)
+
+    # Señal 1: El mejor resultado es objetivamente muy pobre
+    if top_score < settings.min_top_score:
+        logger.warning(f"Evidencia insuficiente: El top score ({top_score:.2f}) es menor al mínimo requerido ({settings.min_top_score})")
+        return EvidenceResult(
+            verdict=EvidenceVerdict.INSUFFICIENT,
+            top_score=top_score,
+            relevant_count=relevant_count,
+            details=f"Mejor match tiene score {top_score:.2f} < {settings.min_top_score}"
+        )
+
+    # Señal 3: Dispersión de scores (Ruido general)
+    last_score = reranked_chunks[-1].metadata.get("rerank_score", 0.0)
+    score_spread = top_score - last_score
+    if top_score < 0.85 and score_spread < 0.05:
+        # Los scores son idénticos o casi idénticos y no son excepcionalmente altos.
+        # Esto suele indicar que el modelo está "adivinando" porque no hay un ganador obvio.
+        logger.warning(f"Baja confianza: Spread de scores muy bajo ({score_spread:.2f}) indicando probable ruido")
+        return EvidenceResult(
+            verdict=EvidenceVerdict.LOW_CONFIDENCE,
+            top_score=top_score,
+            relevant_count=relevant_count,
+            details=f"Dispersión baja ({score_spread:.2f}) indica falta de información resolutiva."
+        )
+
+    # Señal 2: Tenemos información pero muy poca (menos de 2 chunks pasables)
+    if relevant_count < settings.min_relevant_chunks:
+        logger.warning(f"Baja confianza: Solo hay {relevant_count} chunks relevantes, esperábamos {settings.min_relevant_chunks}")
+        return EvidenceResult(
+            verdict=EvidenceVerdict.LOW_CONFIDENCE,
+            top_score=top_score,
+            relevant_count=relevant_count,
+            details=f"Pocos chunks relevantes ({relevant_count} < {settings.min_relevant_chunks})"
+        )
+
+    # Si pasa todos los filtros, es SUFICIENTE
+    logger.info(f"✅ Evidencia sólida: Top Score {top_score:.2f} con {relevant_count} chunks relevantes.")
     return EvidenceResult(
         verdict=EvidenceVerdict.SUFFICIENT,
-        top_score=0.0,
-        relevant_count=len(reranked_chunks),
-        details="Evaluación de evidencia pendiente de implementación",
+        top_score=top_score,
+        relevant_count=relevant_count,
+        details="Evidencia aprobada por análisis de rank."
     )
 
 

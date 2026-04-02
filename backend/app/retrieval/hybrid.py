@@ -42,9 +42,10 @@ def create_hybrid_retriever(semantic_retriever, bm25_retriever) -> EnsembleRetri
         f"Semántico: {settings.semantic_weight} | BM25: {settings.bm25_weight}"
     )
 
-    # TODO: Implementar
-    raise NotImplementedError
-
+    return EnsembleRetriever(
+        retrievers=[semantic_retriever, bm25_retriever],
+        weights=[settings.semantic_weight, settings.bm25_weight]
+    )
 
 def retrieve(retriever: EnsembleRetriever, query: str) -> list[Document]:
     """
@@ -62,5 +63,18 @@ def retrieve(retriever: EnsembleRetriever, query: str) -> list[Document]:
     - De-duplicar por contenido (puede haber overlap entre semántico y BM25)
     - Loggear cantidad de resultados
     """
-    # TODO: Implementar
-    return []
+    results = retriever.invoke(query)
+    
+    # De-duplicación estricta por contenido exacto de página.
+    # El EnsembleRetriever de Langchain hace el ranking RRF,
+    # pero puede haber solapamientos si falló el macheo exacto de objetos.
+    unique_docs = []
+    seen_content = set()
+    for doc in results:
+        if doc.page_content not in seen_content:
+            seen_content.add(doc.page_content)
+            unique_docs.append(doc)
+            
+    logger.info(f"Búsqueda híbrida retornó {len(unique_docs)} documentos únicos para: '{query}'")
+    
+    return unique_docs

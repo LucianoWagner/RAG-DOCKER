@@ -49,11 +49,33 @@ class RAGPipeline:
         self.settings = get_settings()
         logger.info("Inicializando RAG Pipeline...")
 
-        # TODO: Inicializar componentes
-        # self.vector_store = ...
-        # self.bm25_retriever = ...
-        # self.hybrid_retriever = ...
-        # self.llm = ...
+        from app.retrieval.vector_store import get_vector_store, get_semantic_retriever
+        from app.retrieval.bm25_retriever import create_bm25_retriever
+        from app.retrieval.hybrid import create_hybrid_retriever
+        from app.generation.generator import get_llm
+
+        # 1. Inicialización de clientes core
+        self.vector_store = get_vector_store()
+        self.semantic_retriever = get_semantic_retriever()
+        
+        # 2. Re-construcción del BM25 Index desde ChromaDB
+        res = self.vector_store._collection.get(include=["documents", "metadatas"])
+        chunks = []
+        if res and res["documents"]:
+            for text, meta in zip(res["documents"], res["metadatas"]):
+                chunks.append(Document(page_content=text, metadata=meta))
+                
+        if chunks:
+            self.bm25_retriever = create_bm25_retriever(chunks)
+            # 3. Empaquetado Híbrido
+            self.hybrid_retriever = create_hybrid_retriever(self.semantic_retriever, self.bm25_retriever)
+        else:
+            logger.warning("Pipeline no encontró chunks. Usa BM25 = None.")
+            self.bm25_retriever = None
+            self.hybrid_retriever = self.semantic_retriever  # fallback
+            
+        # 4. Motor Generativo
+        self.llm = get_llm()
 
         logger.info("RAG Pipeline inicializado")
 
@@ -90,18 +112,38 @@ class RAGPipeline:
         """
         logger.info(f"Pipeline RAG ejecutando | Pregunta: {question[:80]}...")
 
-        # TODO: Implementar orquestación
+        from app.retrieval.hybrid import retrieve
+        from app.retrieval.reranker import rerank_documents
+        from app.generation.evidence_checker import check_evidence, get_abstention_response
+        from app.generation.prompt_templates import format_context, build_messages
+        from app.generation.generator import generate_response
 
-        # Placeholder
-        from app.models import EvidenceResult
-        return RAGResponse(
-            answer="🚧 Pipeline RAG en construcción.",
-            sources=[],
-            evidence=EvidenceResult(
-                verdict=EvidenceVerdict.INSUFFICIENT,
-                top_score=0.0,
-                relevant_count=0,
-                details="Pipeline no implementado aún",
-            ),
-            retrieval_metadata={"question": question},
-        )
+        # 1. RETRIEVAL HÍBRIDO
+        retrieved_chunks = retrieve(self.hybrid_retriever, question) if self.bm25_retriever else self.hybrid_retriever.invoke(question)
+
+        # 2. RERANKING
+        reranked_chunks = rerank_documents(question, retrieved_chunks)
+
+        # 3. EVIDENCE CHECK
+        evidence = check_evidence(question, reranked_chunks)
+        if evidence.verdict == EvidenceVerdict.INSUFFICIENT:
+            logger.warning("Evidencia insuficiente. Resolviendo con abstención programada.")
+            return RAGResponse(
+                answer=get_abstention_response(),
+                sources=[],
+                evidence=evidence,
+                retrieval_metadata={
+                    "question": question,
+                    "chunks_used": 0,
+                    "status": "abstained"
+                }
+            )
+
+        # 4. GENERACIÓN
+        logger.info("Evidencia validada. Formateando contexto y delegando a Ollama...")
+        context = format_context(reranked_chunks)
+        messages = build_messages(question, context)
+        response = generate_response(question, reranked_chunks, evidence, messages)
+
+        # 5. RETURN
+        return response

@@ -43,5 +43,6 @@ def create_bm25_retriever(chunks: list[Document]) -> BM25Retriever:
     settings = get_settings()
     logger.info(f"Creando BM25 retriever con {len(chunks)} chunks, k={settings.top_k}")
 
-    # TODO: Implementar
-    raise NotImplementedError
+    bm25_retriever = BM25Retriever.from_documents(chunks)
+    bm25_retriever.k = settings.top_k
+    return bm25_retriever

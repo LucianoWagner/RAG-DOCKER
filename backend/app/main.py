@@ -5,7 +5,7 @@ Punto de entrada del backend. Define los endpoints HTTP
 que OpenWebUI (vía Pipelines) y el frontend consumen.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
@@ -52,6 +52,13 @@ async def health_check():
 # Endpoints RAG
 # =============================================================================
 
+from functools import lru_cache
+
+@lru_cache()
+def get_pipeline():
+    from app.pipeline import RAGPipeline
+    return RAGPipeline()
+
 @app.post("/query")
 async def query_rag(question: str):
     """
@@ -59,31 +66,36 @@ async def query_rag(question: str):
 
     Recibe una pregunta en lenguaje natural y devuelve una respuesta
     fundamentada en la documentación de Docker, con citas y trazabilidad.
-
-    TODO: Implementar — conectar con pipeline.py
     """
-    # TODO: Integrar con RAGPipeline
-    return {
-        "status": "not_implemented",
-        "message": "Pipeline RAG pendiente de implementación",
-        "question": question,
-    }
+    try:
+        pipeline = get_pipeline()
+        response = pipeline.run(question)
+        return response.model_dump()
+    except Exception as e:
+        logger.error(f"Error procesando query: {e}")
+        return {"error": str(e)}
 
 
 @app.post("/ingest")
-async def ingest_corpus():
+async def ingest_corpus(background_tasks: BackgroundTasks, force: bool = False):
     """
     Trigger manual para re-indexar el corpus en ChromaDB.
 
     Solo necesario si se actualiza la documentación fuente.
     Los embeddings persisten en el volumen Docker de ChromaDB.
-
-    TODO: Implementar — conectar con ingestion/run.py
+    
+    La ejecución se realiza en 2do plano porque generar los embeddings locales
+    puede tomar varios minutos.
     """
-    # TODO: Integrar con módulo de ingesta
+    from app.ingestion.run import run_ingestion
+    
+    # Agregar la función al spooler de tareas en segundo plano de FastAPI
+    background_tasks.add_task(run_ingestion, force=force)
+    
     return {
-        "status": "not_implemented",
-        "message": "Ingesta pendiente de implementación",
+        "status": "processing",
+        "message": "Ingesta iniciada en segundo plano. Esto puede tomar varios minutos dependiendo de la máquina.",
+        "force_applied": force
     }
 
 

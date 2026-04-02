@@ -35,9 +35,12 @@ def get_llm() -> ChatOllama:
       )
     """
     settings = get_settings()
-    # TODO: Implementar
-    raise NotImplementedError
-
+    return ChatOllama(
+        model=settings.llm_model,
+        base_url=settings.ollama_base_url,
+        num_ctx=8192,  # Ventana de contexto ampliada para meter docs
+        temperature=0.1,  # Poca creatividad para mayor apego al texto
+    )
 
 def generate_response(
     question: str,
@@ -64,19 +67,25 @@ def generate_response(
     4. Construir lista de SourceCitation con metadata de cada chunk citado
     5. Armar RAGResponse completo
     """
+    llm = get_llm()
     logger.info(f"Generando respuesta | chunks: {len(context_chunks)}")
 
-    # TODO: Implementar
+    # Invocación sincrónica cruda a Ollama
+    response = llm.invoke(messages)
+    answer_text = response.content
+
+    # Mapeo de citas post-generación
+    citations = parse_citations(answer_text, context_chunks)
+
     return RAGResponse(
-        answer="Respuesta pendiente de implementación",
-        sources=[],
+        answer=answer_text,
+        sources=citations,
         evidence=evidence,
         retrieval_metadata={
             "question": question,
             "chunks_used": len(context_chunks),
         },
     )
-
 
 def parse_citations(answer_text: str, chunks: list[Document]) -> list[SourceCitation]:
     """
@@ -95,5 +104,31 @@ def parse_citations(answer_text: str, chunks: list[Document]) -> list[SourceCita
     - Para cada N, obtener el chunk correspondiente (por índice)
     - Construir SourceCitation con metadata del chunk
     """
-    # TODO: Implementar
-    return []
+    import re
+    # Busca todas las citas de estilo [Fuente 1] [Fuente 2] ...
+    matches = re.findall(r"\[Fuente (\d+)\]", answer_text, re.IGNORECASE)
+    
+    citations = []
+    seen = set()
+    for num_str in matches:
+        try:
+            n = int(num_str)
+            index = n - 1
+            if 0 <= index < len(chunks) and index not in seen:
+                seen.add(index)
+                chunk = chunks[index]
+                meta = chunk.metadata
+                citations.append(
+                    SourceCitation(
+                        source_file=meta.get("source_file", ""),
+                        category=meta.get("category", ""),
+                        platform=meta.get("platform", ""),
+                        chunk_index=meta.get("chunk_index", 0),
+                        doc_title=meta.get("doc_title", ""),
+                        snippet=chunk.page_content[:200]  # pequeña preview
+                    )
+                )
+        except ValueError:
+            continue
+            
+    return citations
