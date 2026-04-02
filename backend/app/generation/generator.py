@@ -6,39 +6,32 @@ Responsabilidad:
 - Parsear la respuesta para extraer citas [Fuente N]
 - Construir el objeto RAGResponse con respuesta + citas + metadata
 
-Configuración importante de Ollama:
-- num_ctx: Context window. Default de Ollama es 2048 (MUY poco para RAG).
-  Se debe configurar a 8192+ para que el LLM vea todos los chunks.
+Configuración importante de Groq:
+- El modelo se define en el constructor de ChatGroq.
 """
 
 from langchain_core.documents import Document
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from loguru import logger
 
 from app.config import get_settings
 from app.models import RAGResponse, SourceCitation, EvidenceResult
 
 
-def get_llm() -> ChatOllama:
+def get_llm() -> ChatGroq:
     """
-    Crea la instancia del LLM vía Ollama.
+    Crea la instancia del LLM vía la nube súper-rápida de Groq.
 
     Returns:
-        ChatOllama configurado con modelo y context window adecuados.
-
-    TODO: Implementar
-    - ChatOllama(
-        model=settings.llm_model,
-        base_url=settings.ollama_base_url,
-        num_ctx=8192,  # CRÍTICO: aumentar context window
-        temperature=0.1,  # Baja temperatura para respuestas precisas
-      )
+        ChatGroq configurado. Lee GROQ_API_KEY desde configuración.
     """
     settings = get_settings()
-    return ChatOllama(
-        model=settings.llm_model,
-        base_url=settings.ollama_base_url,
-        num_ctx=8192,  # Ventana de contexto ampliada para meter docs
+    if not settings.groq_api_key:
+        raise ValueError("GROQ_API_KEY no encontrada. Agregala a tu archivo .env")
+        
+    return ChatGroq(
+        model_name="llama-3.1-8b-instant",  # El mismo modelo gratis pero potenciado por LPUs
+        api_key=settings.groq_api_key,
         temperature=0.1,  # Poca creatividad para mayor apego al texto
     )
 

@@ -14,9 +14,12 @@ class Settings(BaseSettings):
     """Configuración del backend RAG, cargada desde variables de entorno."""
 
     # --- Ollama ---
-    ollama_base_url: str = "http://localhost:11434"
+    ollama_base_url: str = "http://127.0.0.1:11434"
     llm_model: str = "llama3.1:8b"
     embedding_model: str = "nomic-embed-text"
+
+    # --- Groq (Nube) ---
+    groq_api_key: str | None = None
 
     # --- ChromaDB ---
     chroma_host: str = "localhost"
@@ -42,8 +45,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     class Config:
-        env_file = ".env"
+        env_file = [".env", "../.env"]
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 @lru_cache()
