@@ -31,9 +31,10 @@ rank-bm25>=0.2.2
 # --- Reranking ---
 flashrank>=0.2.9
 
-# --- Evaluación (LLM-as-Judge, sin RAGAS) ---
-# Usamos evaluación custom con el propio LLM de Ollama como juez.
-# Ver evaluation/metrics.py para detalles.
+# --- Evaluación (RAGAS E2E) ---
+ragas>=0.1.20
+datasets>=2.19.0
+pandas>=2.2.0
 
 # --- Utilidades ---
 httpx>=0.28.0

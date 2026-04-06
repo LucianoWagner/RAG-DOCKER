@@ -15,7 +15,7 @@ from langchain_groq import ChatGroq
 from loguru import logger
 
 from app.config import get_settings
-from app.models import RAGResponse, SourceCitation, EvidenceResult
+from app.models import RAGResponse, SourceCitation, EvidenceResult, RetrievalMetadata, ChunkMetadata
 
 
 def get_llm() -> ChatGroq:
@@ -30,9 +30,9 @@ def get_llm() -> ChatGroq:
         raise ValueError("GROQ_API_KEY no encontrada. Agregala a tu archivo .env")
         
     return ChatGroq(
-        model_name="llama-3.1-8b-instant",  # El mismo modelo gratis pero potenciado por LPUs
+        model_name="llama-3.1-8b-instant",  # Modelo ligero para bypass de tier de Groq
         api_key=settings.groq_api_key,
-        temperature=0.1,  # Poca creatividad para mayor apego al texto
+        temperature=0.0,  # Temperatura CERO: Robot puro copista/pegador, 0% creatividad y sustracción de alucinaciones
     )
 
 def generate_response(
@@ -74,10 +74,13 @@ def generate_response(
         answer=answer_text,
         sources=citations,
         evidence=evidence,
-        retrieval_metadata={
-            "question": question,
-            "chunks_used": len(context_chunks),
-        },
+        retrieval_metadata=RetrievalMetadata(
+            question=question,
+            chunks_used=len(context_chunks),
+            chunks_metadata=[
+                ChunkMetadata(**chunk.metadata, chunk_text=chunk.page_content) for chunk in context_chunks
+            ]
+        ),
     )
 
 def parse_citations(answer_text: str, chunks: list[Document]) -> list[SourceCitation]:
@@ -98,8 +101,8 @@ def parse_citations(answer_text: str, chunks: list[Document]) -> list[SourceCita
     - Construir SourceCitation con metadata del chunk
     """
     import re
-    # Busca todas las citas de estilo [Fuente 1] [Fuente 2] ...
-    matches = re.findall(r"\[Fuente (\d+)\]", answer_text, re.IGNORECASE)
+    # Busca todas las citas de estilo [Source 1] [Source 2] ...
+    matches = re.findall(r"\[Source (\d+)\]", answer_text, re.IGNORECASE)
     
     citations = []
     seen = set()
@@ -113,15 +116,16 @@ def parse_citations(answer_text: str, chunks: list[Document]) -> list[SourceCita
                 meta = chunk.metadata
                 citations.append(
                     SourceCitation(
-                        source_file=meta.get("source_file", ""),
-                        category=meta.get("category", ""),
-                        platform=meta.get("platform", ""),
-                        chunk_index=meta.get("chunk_index", 0),
-                        doc_title=meta.get("doc_title", ""),
-                        snippet=chunk.page_content[:200]  # pequeña preview
+                        citation_id=n,
+                        source_file=meta.get("source_file", "unknown"),
+                        doc_title=meta.get("doc_title", "Unspecified"),
+                        section_header=meta.get("section_header", "General"),
+                        relevant_fragment=chunk.page_content,
+                        relevance_score=meta.get("relevance_score", 0.0)
                     )
                 )
-        except ValueError:
+        except Exception as e:
+            logger.warning(f"Error parseando cita [Fuente {num_str}]: {e}")
             continue
             
     return citations

@@ -1,0 +1,77 @@
+[
+  {
+    "category": "installation",
+    "question": "How do I install Docker Desktop on Windows?",
+    "ground_truth": "Download the Docker Desktop installer for Windows from the official Docker hub. Double-click the installer and follow the wizard. Ensure that Hyper-V and Windows Containers features are enabled, or WSL 2 is installed if you choose the WSL 2 backend."
+  },
+  {
+    "category": "installation",
+    "question": "What are the system requirements for installing Docker Engine on Ubuntu?",
+    "ground_truth": "You need a 64-bit version of one of these Ubuntu versions: Ubuntu 24.04, 22.04, 20.04, or 18.04. Docker Engine is compatible with x86_64, amd64, armhf, arm64, and s390x architectures."
+  },
+  {
+    "category": "installation",
+    "question": "How can I install Docker Compose standalone?",
+    "ground_truth": "You can download the Docker Compose standalone binary directly from the GitHub releases page and place it into a directory in your system PATH, or install it using curl. Ensure you apply executable permissions to the binary."
+  },
+  {
+    "category": "getting_started",
+    "question": "What is the command to run a basic nginx container?",
+    "ground_truth": "You can run an nginx container in detached mode and publish ports by using the command: docker run -d -p 80:80 --name my-nginx nginx"
+  },
+  {
+    "category": "getting_started",
+    "question": "How do I stop all running containers?",
+    "ground_truth": "To stop all running containers, you first get their IDs with 'docker ps -q' and pass them to the stop command: docker stop $(docker ps -aq)"
+  },
+  {
+    "category": "getting_started",
+    "question": "What does 'docker compose up' do?",
+    "ground_truth": "The 'docker compose up' command builds, (re)creates, starts, and attaches to containers for a service defined in a compose.yml file."
+  },
+  {
+    "category": "troubleshooting",
+    "question": "What should I do if I get the error 'Unable to connect to the Docker daemon'?",
+    "ground_truth": "This error means the Docker client cannot reach the daemon. Ensure the Docker daemon is actually running. If you are using Docker Desktop for Linux or SDKs, you might need to set the DOCKER_HOST environment variable to point to the correct socket."
+  },
+  {
+    "category": "troubleshooting",
+    "question": "Docker Desktop fails to start after installing anti-virus software on Windows. How do I fix it?",
+    "ground_truth": "Some antivirus software blocks Hyper-V or Docker networking. To resolve this, you should temporarily uninstall the antivirus or add Docker to the exclusions/exceptions list in the antivirus settings."
+  },
+  {
+    "category": "troubleshooting",
+    "question": "My docker build is extremely slow. How can I speed it up?",
+    "ground_truth": "Store your instruction layers efficiently by putting instructions that change frequently at the end of the Dockerfile. Use .dockerignore to exclude unnecessary files from the build context, and utilize BuildKit caching mechanisms."
+  },
+  {
+    "category": "out_of_domain",
+    "question": "How do I configure a Kubernetes cluster using Minikube?",
+    "ground_truth": "I'm sorry, but the provided documentation is focused on Docker and does not contain information on how to configure Kubernetes with Minikube."
+  },
+  {
+    "category": "out_of_domain",
+    "question": "Which is better for production, Kubernetes or Docker Swarm?",
+    "ground_truth": "I'm sorry, but this requires subjective comparisons and the provided documentation does not contain a solution to this question."
+  },
+  {
+    "category": "ambiguous",
+    "question": "Docker is not working, it gives an error.",
+    "ground_truth": "I'm sorry, but 'gives an error' is too broad. Please provide the exact error message or context so I can look up the correct troubleshooting steps in the documentation."
+  },
+  {
+    "category": "ambiguous",
+    "question": "How do I update my container?",
+    "ground_truth": "Containers are meant to be ephemeral. To update a container, you generally pull the newer image version and recreate the container using 'docker run' or 'docker compose up' rather than updating it in place."
+  },
+  {
+    "category": "configuration",
+    "question": "How can I change the default bridge network IP range?",
+    "ground_truth": "You can provide a completely custom default network configuration by editing the daemon.json file and adding the 'bip' parameter with your desired subnet, then restarting the Docker daemon."
+  },
+  {
+    "category": "configuration",
+    "question": "Can I use Docker without sudo privileges on Linux?",
+    "ground_truth": "Yes, you can manage Docker as a non-root user by creating the 'docker' group and adding your user to it using the 'usermod -aG docker $USER' command."
+  }
+]

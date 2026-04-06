@@ -31,10 +31,10 @@ class Settings(BaseSettings):
     chunk_overlap: int = 200
 
     # --- Retrieval ---
-    top_k: int = 10
-    rerank_top_n: int = 5
-    semantic_weight: float = 0.6
-    bm25_weight: float = 0.4
+    top_k: int = 30
+    rerank_top_n: int = 10
+    semantic_weight: float = 0.4
+    bm25_weight: float = 0.6
 
     # --- Evidence Check ---
     min_top_score: float = 0.3

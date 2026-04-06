@@ -35,6 +35,7 @@ class ChunkMetadata(BaseModel):
     doc_type: str = Field(default="guide", description="Tipo: guide, reference, troubleshooting")
     chunk_index: int = Field(default=0, description="Índice del chunk en el documento")
     total_chunks: int = Field(default=0, description="Total de chunks del documento")
+    chunk_text: str = Field(default="", description="Texto completo crudo del chunk para auditoría de alucinaciones")
 
 
 # =============================================================================
@@ -79,9 +80,16 @@ class QueryRequest(BaseModel):
     question: str = Field(description="Pregunta del usuario")
 
 
+class RetrievalMetadata(BaseModel):
+    """Metadatos exhaustivos sobre el proceso de retrieval."""
+    question: str = Field(description="Pregunta del usuario")
+    chunks_used: int = Field(description="Cantidad de chunks utilizados como contexto")
+    chunks_metadata: list[ChunkMetadata] = Field(default_factory=list, description="Metadata detallada de cada chunk recuperado")
+
+
 class RAGResponse(BaseModel):
     """Respuesta completa del pipeline RAG con citas y trazabilidad."""
     answer: str = Field(description="Texto de la respuesta con citas inline")
     sources: list[SourceCitation] = Field(default_factory=list, description="Fuentes citadas")
     evidence: EvidenceResult = Field(description="Resultado de verificación de evidencia")
-    retrieval_metadata: dict = Field(default_factory=dict, description="Metadata del proceso")
+    retrieval_metadata: RetrievalMetadata = Field(description="Metadata estructurada del proceso de recuperación")
