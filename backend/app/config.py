@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     embedding_model: str = "nomic-embed-text"
 
     # --- Groq (Nube) ---
-    groq_api_key: str | None = None
+    groq_api_key: str | None #Agrega tu api key
 
     # --- ChromaDB ---
     chroma_host: str = "localhost"

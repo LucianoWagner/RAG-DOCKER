@@ -127,28 +127,56 @@ async def chat_completions(request: dict):
     Endpoint compatible con OpenAI Chat Completions API.
     OpenWebUI envía las consultas aquí cuando se selecciona
     el modelo 'docker-rag-assistant'.
-
-    TODO: Implementar — parsear request de OpenAI format,
-          ejecutar pipeline RAG, devolver en formato OpenAI.
     """
-    # TODO: Parsear mensajes del formato OpenAI
-    # TODO: Extraer la pregunta del usuario
-    # TODO: Ejecutar pipeline RAG
-    # TODO: Formatear respuesta como OpenAI ChatCompletion
+    messages = request.get("messages", [])
+    
+    # Extraer la última pregunta del usuario
+    question = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            question = msg.get("content", "")
+            break
+            
+    if not question:
+        question = "Hola"
 
-    # Respuesta placeholder en formato OpenAI
+    try:
+        pipeline = get_pipeline()
+        rag_response = pipeline.run(question)
+        
+        # Formatear la respuesta
+        final_answer = rag_response.answer
+        
+        # Opcional: Agregar fuentes a la respuesta si existen
+        if rag_response.sources:
+            final_answer += "\n\n---\n**Fuentes:**\n"
+            for src in rag_response.sources:
+                final_answer += f"- {src.source_file} ({src.section_header})\n"
+                
+    except Exception as e:
+        logger.error(f"Error procesando chat completion: {e}")
+        final_answer = f"Error procesando la solicitud: {e}"
+
+    # Respuesta en formato OpenAI
+    import time
     return {
-        "id": "chatcmpl-placeholder",
+        "id": f"chatcmpl-{int(time.time())}",
         "object": "chat.completion",
+        "created": int(time.time()),
+        "model": request.get("model", "docker-rag-assistant"),
         "choices": [
             {
                 "index": 0,
                 "message": {
                     "role": "assistant",
-                    "content": "🚧 Pipeline RAG en construcción. Este endpoint será implementado próximamente.",
+                    "content": final_answer,
                 },
                 "finish_reason": "stop",
             }
         ],
-        "model": "docker-rag-assistant",
+        "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+        }
     }

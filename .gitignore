@@ -12,6 +12,7 @@ build/
 *.egg
 .venv/
 venv/
+./backend/venv/
 
 # ==== Data (persiste en Docker volumes) ====
 data/

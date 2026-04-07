@@ -83,6 +83,9 @@ class QueryRequest(BaseModel):
 class RetrievalMetadata(BaseModel):
     """Metadatos exhaustivos sobre el proceso de retrieval."""
     question: str = Field(description="Pregunta del usuario")
+    original_question: str | None = Field(default=None, description="Pregunta antes de traducir (si aplica)")
+    translated_question: str | None = Field(default=None, description="Pregunta traducida utilizada (si aplica)")
+    status: str | None = Field(default=None, description="Estado del retrieval (e.g., abstained)")
     chunks_used: int = Field(description="Cantidad de chunks utilizados como contexto")
     chunks_metadata: list[ChunkMetadata] = Field(default_factory=list, description="Metadata detallada de cada chunk recuperado")
 

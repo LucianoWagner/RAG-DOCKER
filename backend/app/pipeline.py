@@ -110,13 +110,22 @@ class RAGPipeline:
         5. RETURN
            return response
         """
-        logger.info(f"Pipeline RAG ejecutando | Pregunta: {question[:80]}...")
+        logger.info(f"Pipeline RAG ejecutando | Pregunta dictada: {question[:80]}...")
 
         from app.retrieval.hybrid import retrieve
         from app.retrieval.reranker import rerank_documents
         from app.generation.evidence_checker import check_evidence, get_abstention_response
         from app.generation.prompt_templates import format_context, build_messages
         from app.generation.generator import generate_response
+        from app.generation.translator import detect_spanish, translate_to_english, translate_to_spanish
+
+        # 0. DETECCIÓN Y TRADUCCIÓN DE IDIOMA
+        is_spanish = detect_spanish(self.llm, question)
+        original_question = question
+        
+        if is_spanish:
+            question = translate_to_english(self.llm, question)
+            logger.info(f"Pregunta traducida al inglés para procesamiento: {question}")
 
         # 1. RETRIEVAL HÍBRIDO
         retrieved_chunks = retrieve(self.hybrid_retriever, question) if self.bm25_retriever else self.hybrid_retriever.invoke(question)
@@ -128,22 +137,37 @@ class RAGPipeline:
         evidence = check_evidence(question, reranked_chunks)
         if evidence.verdict == EvidenceVerdict.INSUFFICIENT:
             logger.warning("Evidencia insuficiente. Resolviendo con abstención programada.")
+            response_text = get_abstention_response()
+            # Si era español, traducir la abstención
+            if is_spanish:
+                response_text = translate_to_spanish(self.llm, response_text)
+                
             return RAGResponse(
-                answer=get_abstention_response(),
+                answer=response_text,
                 sources=[],
                 evidence=evidence,
                 retrieval_metadata={
-                    "question": question,
+                    "question": original_question,
+                    "translated_question": question if is_spanish else None,
                     "chunks_used": 0,
                     "status": "abstained"
                 }
             )
 
         # 4. GENERACIÓN
-        logger.info("Evidencia validada. Formateando contexto y delegando a Ollama...")
+        logger.info("Evidencia validada. Formateando contexto y delegando al LLM...")
         context = format_context(reranked_chunks)
         messages = build_messages(question, context)
         response = generate_response(question, reranked_chunks, evidence, messages)
 
-        # 5. RETURN
+        # 5. TRADUCCIÓN DE LA RESPUESTA
+        if is_spanish:
+            logger.info("Traduciendo respuesta final de vuelta al español...")
+            response.answer = translate_to_spanish(self.llm, response.answer)
+            response.retrieval_metadata.translated_question = question
+        
+        response.retrieval_metadata.original_question = original_question
+        response.retrieval_metadata.question = original_question
+
+        # 6. RETURN
         return response
