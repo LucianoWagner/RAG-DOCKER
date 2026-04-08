@@ -40,6 +40,7 @@ def generate_response(
     context_chunks: list[Document],
     evidence: EvidenceResult,
     messages: list[dict],
+    llm: ChatGroq | None = None,
 ) -> RAGResponse:
     """
     Genera la respuesta final del pipeline RAG.
@@ -60,7 +61,8 @@ def generate_response(
     4. Construir lista de SourceCitation con metadata de cada chunk citado
     5. Armar RAGResponse completo
     """
-    llm = get_llm()
+    if llm is None:
+        llm = get_llm()  # Fallback si se llama sin instancia (e.g. tests)
     logger.info(f"Generando respuesta | chunks: {len(context_chunks)}")
 
     # Invocación sincrónica cruda a Ollama

@@ -12,7 +12,7 @@ from langchain_core.documents import Document
 from loguru import logger
 
 from app.config import get_settings
-from app.models import RAGResponse, EvidenceVerdict
+from app.models import RAGResponse, EvidenceVerdict, RetrievalMetadata
 
 
 class RAGPipeline:
@@ -146,19 +146,20 @@ class RAGPipeline:
                 answer=response_text,
                 sources=[],
                 evidence=evidence,
-                retrieval_metadata={
-                    "question": original_question,
-                    "translated_question": question if is_spanish else None,
-                    "chunks_used": 0,
-                    "status": "abstained"
-                }
+                retrieval_metadata=RetrievalMetadata(
+                    question=original_question,
+                    original_question=original_question,
+                    translated_question=question if is_spanish else None,
+                    chunks_used=0,
+                    status="abstained",
+                ),
             )
 
         # 4. GENERACIÓN
         logger.info("Evidencia validada. Formateando contexto y delegando al LLM...")
         context = format_context(reranked_chunks)
         messages = build_messages(question, context)
-        response = generate_response(question, reranked_chunks, evidence, messages)
+        response = generate_response(question, reranked_chunks, evidence, messages, llm=self.llm)
 
         # 5. TRADUCCIÓN DE LA RESPUESTA
         if is_spanish:

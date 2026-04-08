@@ -96,3 +96,21 @@ class RAGResponse(BaseModel):
     sources: list[SourceCitation] = Field(default_factory=list, description="Fuentes citadas")
     evidence: EvidenceResult = Field(description="Resultado de verificación de evidencia")
     retrieval_metadata: RetrievalMetadata = Field(description="Metadata estructurada del proceso de recuperación")
+
+
+# =============================================================================
+# Modelos de Request para OpenAI API Compatibility
+# =============================================================================
+
+class ChatMessage(BaseModel):
+    """Mensaje individual en formato OpenAI."""
+    role: str = Field(description="Rol del mensaje: system, user, assistant")
+    content: str = Field(description="Contenido del mensaje")
+
+
+class ChatCompletionRequest(BaseModel):
+    """Request compatible con OpenAI Chat Completions API."""
+    model: str = Field(default="docker-rag-assistant", description="ID del modelo a usar")
+    messages: list[ChatMessage] = Field(default_factory=list, description="Lista de mensajes del chat")
+    temperature: float = Field(default=0.0, ge=0, le=2)
+    stream: bool = Field(default=False)

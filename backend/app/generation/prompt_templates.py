@@ -16,6 +16,14 @@ Decisiones de diseño:
 # =============================================================================
 # System Prompt Principal
 # =============================================================================
+# NOTA DE DISEÑO: El prompt fuerza respuesta en ENGLISH a propósito.
+# El módulo translator.py se encarga de:
+#   1. Detectar si la query original es español (vía langdetect)
+#   2. Traducir la query a inglés ANTES de llegar aquí
+#   3. Traducir la respuesta de vuelta a español DESPUÉS de la generación
+# Limitación conocida: idiomas distintos a español/inglés reciben respuesta
+# en inglés crudo (no se traduce). Extensible en el futuro.
+# =============================================================================
 
 SYSTEM_PROMPT = """You are a strictly grounded technical assistant specialized in Docker. Your sole purpose is to answer questions using ONLY the provided documentation context.
 

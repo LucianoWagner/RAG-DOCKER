@@ -5,11 +5,14 @@ Punto de entrada del backend. Define los endpoints HTTP
 que OpenWebUI (vía Pipelines) y el frontend consumen.
 """
 
+import time
+
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from app.config import get_settings
+from app.models import ChatCompletionRequest
 
 # =============================================================================
 # Inicialización de la app
@@ -122,19 +125,17 @@ async def list_models():
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: dict):
+async def chat_completions(request: ChatCompletionRequest):
     """
     Endpoint compatible con OpenAI Chat Completions API.
     OpenWebUI envía las consultas aquí cuando se selecciona
     el modelo 'docker-rag-assistant'.
     """
-    messages = request.get("messages", [])
-    
     # Extraer la última pregunta del usuario
     question = ""
-    for msg in reversed(messages):
-        if msg.get("role") == "user":
-            question = msg.get("content", "")
+    for msg in reversed(request.messages):
+        if msg.role == "user":
+            question = msg.content
             break
             
     if not question:
@@ -158,12 +159,11 @@ async def chat_completions(request: dict):
         final_answer = f"Error procesando la solicitud: {e}"
 
     # Respuesta en formato OpenAI
-    import time
     return {
         "id": f"chatcmpl-{int(time.time())}",
         "object": "chat.completion",
         "created": int(time.time()),
-        "model": request.get("model", "docker-rag-assistant"),
+        "model": request.model,
         "choices": [
             {
                 "index": 0,
