@@ -71,6 +71,10 @@ El proyecto separa **infraestructura** (Docker) y **lógica de negocio** (Python
 | Embeddings | Ollama (nomic-embed-text) | Docker |
 | Base Vectorial | ChromaDB | Docker |
 | Backend RAG | FastAPI + LangChain | **Local (venv)** |
+| Generación | Groq API (llama-3.1-8b) | Cloud |
+| Traducción (Detección) | langdetect | Local (venv) - 0 tokens |
+| Traducción (ES→EN) | deep-translator (Google) | Local (venv) - 0 tokens |
+| Traducción (EN→ES) | Groq API (preserva código) | Cloud |
 | Búsqueda Léxica | BM25 (rank-bm25) | Local (venv) |
 | Reranking | FlashRank | Local (venv) |
 | Evaluación | LLM-as-Judge (custom) | Local (venv) |
@@ -305,6 +309,21 @@ ProyectoRagSoporteTecnico/
 | venv | 📁 Local | `backend/venv/` (gitignored) | Si borrás la carpeta |
 
 > **Los embeddings NO se recalculan** cada vez que levantás el proyecto. Solo ejecutar `python -m app.ingestion.run` la primera vez o si cambia el corpus.
+
+### Arquitectura de Traducción Híbrida (Multilingüe)
+
+El sistema soporta preguntas en español, pero internamente opera todo el Pipeline RAG (Retrieval, Reranking, Prompts) en **inglés** porque la documentación técnica oficial de Docker es mucho más precisa en ese idioma. Se utiliza una estrategia híbrida optimizada para no gastar tokens:
+
+1. **Detección de Idioma**: Se usa `langdetect` (0 tokens, muy rápido).
+2. **Traducción Inicial (Usuario → Sistema)**: Se usa `deep-translator` (Google Translate gratis, 0 tokens) ya que las consultas de los usuarios son texto plano.
+3. **Traducción Final (Sistema → Usuario)**: Se usa el LLM de Groq. Esto garantiza que comandos como `docker run -d nginx` o términos de infraestructura (volumes, containers) no sean destrozados por traductores genéricos.
+
+### OpenWebUI y Modelos Disponibles
+
+OpenWebUI cree que está hablando con la API oficial de OpenAI. Tu backend expone el modelo **`docker-rag-assistant`**.
+Para evitar que los usuarios bypasseen el RAG y le hablen directo al LLM crudo, se deshabilitó el auto-descubrimiento en el `docker-compose.yml` (`ENABLE_OLLAMA_API=false`). 
+1. Siempre elegir **`docker-rag-assistant`** en la ventana de chat.
+2. Si no aparece, asegúrate de que el servidor FastAPI esté corriendo en el puerto 8080 antes de abrir localhost:3000.
 
 ### Con GPU vs Sin GPU
 
