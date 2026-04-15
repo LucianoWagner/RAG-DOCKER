@@ -71,13 +71,13 @@ El proyecto separa **infraestructura** (Docker) y **lógica de negocio** (Python
 | Embeddings | Ollama (nomic-embed-text) | Docker |
 | Base Vectorial | ChromaDB | Docker |
 | Backend RAG | FastAPI + LangChain | **Local (venv)** |
-| Generación | Groq API (llama-3.1-8b) | Cloud |
+| Generación | Groq API (llama-3.3-70b / 3.1-8b) | Cloud |
 | Traducción (Detección) | langdetect | Local (venv) - 0 tokens |
 | Traducción (ES→EN) | deep-translator (Google) | Local (venv) - 0 tokens |
 | Traducción (EN→ES) | Groq API (preserva código) | Cloud |
 | Búsqueda Léxica | BM25 (rank-bm25) | Local (venv) |
 | Reranking | FlashRank | Local (venv) |
-| Evaluación | LLM-as-Judge (custom) | Local (venv) |
+| Evaluación | RAGAS + Groq (venv-eval, Python 3.11) | Local + Cloud |
 
 ---
 
@@ -135,6 +135,21 @@ python -m pip install --upgrade pip
 
 # Instalar dependencias
 pip install -r backend\requirements.txt
+```
+
+### Paso 3b — Crear entorno de evaluación RAGAS (opcional)
+
+> ⚠️ RAGAS no es compatible con Python 3.14. Se necesita un venv separado con Python 3.11.
+
+```powershell
+# Crear venv de evaluación con Python 3.11
+py -3.11 -m venv backend\venv-eval
+
+# Activar (PowerShell)
+backend\venv-eval\Scripts\Activate.ps1
+
+# Instalar dependencias de evaluación
+pip install -r backend\requirements-eval.txt
 ```
 
 ### Paso 4 — Levantar servicios Docker (Ollama + ChromaDB + OpenWebUI)
@@ -201,7 +216,8 @@ http://localhost:3000
 | `make setup-venv` | Crear venv + instalar dependencias |
 | `make run-backend` | Correr backend FastAPI local |
 | `make ingest` | Indexar corpus en ChromaDB |
-| `make evaluate` | Ejecutar evaluación comparativa |
+| `make evaluate` | Ejecutar evaluación RAGAS (requiere venv-eval) |
+| `make evaluate-8b` | Evaluar con modelo llama-3.1-8b-instant |
 | `make logs` | Ver logs de Docker |
 | `make clean` | Reset completo (¡borra todo!) |
 
@@ -219,7 +235,13 @@ docker exec rag-ollama ollama pull nomic-embed-text     # Descargar embeddings
 cd backend
 uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload   # Correr backend
 python -m app.ingestion.run                                  # Ingestar corpus
-python -m evaluation.run_evaluation                          # Evaluar
+
+# --- Evaluación RAGAS (con venv-eval activado) ---
+backend\venv-eval\Scripts\Activate.ps1                       # Activar venv-eval
+cd backend
+python -m tests.test_evaluation --model llama-3.3-70b-versatile  # Evaluar 70b
+python -m tests.test_evaluation --model llama-3.1-8b-instant     # Evaluar 8b
+python -m tests.test_evaluation --model llama-3.3-70b-versatile --delay 10  # Con delay
 ```
 
 ### Endpoints del Backend
@@ -246,7 +268,10 @@ ProyectoRagSoporteTecnico/
 ├── README.md
 │
 ├── backend/                     # 🔧 Backend RAG (corre LOCAL en venv)
-│   ├── requirements.txt         # Dependencias Python
+│   ├── requirements.txt         # Dependencias Python (producción)
+│   ├── requirements-eval.txt    # Dependencias evaluación (Python 3.11)
+│   ├── venv/                    # Entorno virtual producción (Python 3.14)
+│   ├── venv-eval/               # Entorno virtual evaluación (Python 3.11)
 │   ├── app/
 │   │   ├── main.py              # FastAPI endpoints
 │   │   ├── config.py            # Configuración centralizada
@@ -269,12 +294,14 @@ ProyectoRagSoporteTecnico/
 │   │   └── generation/          # Generación de respuestas
 │   │       ├── evidence_checker.py # Detector de evidencia
 │   │       ├── prompt_templates.py # Prompts especializados
+│   │       ├── translator.py    # Traducción automática ES↔EN
 │   │       └── generator.py     # Invocación LLM + citas
 │   │
-│   └── tests/                   # Tests unitarios
-│       ├── test_chunker.py
-│       ├── test_retrieval.py
-│       └── test_evidence.py
+│   └── tests/                   # 📊 Tests y Evaluación RAGAS
+│       ├── eval_dataset.json    # Dataset de evaluación (20 preguntas)
+│       ├── test_evaluation.py   # Script RAGAS nativo
+│       ├── test_ingestion.py    # Tests de ingesta
+│       └── test_vector_store.py # Tests de vector store
 │
 ├── corpus/                      # 📄 Documentación Docker
 │   ├── raw/                     # Markdown crudo (gitignored)
@@ -282,12 +309,6 @@ ProyectoRagSoporteTecnico/
 │   └── scripts/
 │       ├── download_docs.py     # Descarga docs de GitHub
 │       └── prepare_corpus.py    # Preprocesamiento
-│
-├── evaluation/                  # 📊 Evaluación (LLM-as-Judge)
-│   ├── test_questions.json      # Preguntas de test
-│   ├── run_evaluation.py        # Script de evaluación
-│   ├── metrics.py               # Métricas con LLM como juez
-│   └── results/                 # Resultados por variante
 │
 └── docs/                        # 📖 Documentación del proyecto
     ├── architecture.md          # Diagrama de arquitectura
@@ -307,6 +328,7 @@ ProyectoRagSoporteTecnico/
 | Config OpenWebUI | ✅ Sí | Volumen Docker `rag_openwebui_data` | Solo con `docker compose down -v` |
 | Código Python | 📁 Local | `backend/` en tu repo | No se pierde |
 | venv | 📁 Local | `backend/venv/` (gitignored) | Si borrás la carpeta |
+| venv-eval | 📁 Local | `backend/venv-eval/` (gitignored) | Si borrás la carpeta |
 
 > **Los embeddings NO se recalculan** cada vez que levantás el proyecto. Solo ejecutar `python -m app.ingestion.run` la primera vez o si cambia el corpus.
 
@@ -363,3 +385,11 @@ docker compose down                   # 5. Al terminar (opcional)
 
 **Error al instalar dependencias Python**
 → Asegurate de tener el venv activado. Si ves errores de compilación, puede faltar [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+
+**Error al instalar RAGAS (`scikit-network` falla)**
+→ RAGAS no es compatible con Python 3.14. Usá el `venv-eval` con Python 3.11:
+```powershell
+py -3.11 -m venv backend\venv-eval
+backend\venv-eval\Scripts\Activate.ps1
+pip install -r backend\requirements-eval.txt
+```

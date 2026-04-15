@@ -30,7 +30,7 @@ def get_llm() -> ChatGroq:
         raise ValueError("GROQ_API_KEY no encontrada. Agregala a tu archivo .env")
         
     return ChatGroq(
-        model_name="llama-3.1-8b-instant",  # Modelo ligero para bypass de tier de Groq
+        model_name="llama-3.3-70b-versatile",  # Modelo ligero para bypass de tier de Groq
         api_key=settings.groq_api_key,
         temperature=0.0,  # Temperatura CERO: Robot puro copista/pegador, 0% creatividad y sustracción de alucinaciones
     )

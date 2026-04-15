@@ -2,76 +2,121 @@
   {
     "category": "installation",
     "question": "How do I install Docker Desktop on Windows?",
-    "ground_truth": "Download the Docker Desktop installer for Windows from the official Docker hub. Double-click the installer and follow the wizard. Ensure that Hyper-V and Windows Containers features are enabled, or WSL 2 is installed if you choose the WSL 2 backend."
+    "ground_truth": "Download the Docker Desktop installer from the official Docker website. Run the installer and follow the installation wizard. You need to enable the Hyper-V and Containers Windows features, or use the WSL 2 backend. After installation, start Docker Desktop from the Windows Start menu.",
+    "expected_keywords": ["install", "Docker Desktop", "Windows", "WSL", "Hyper-V"]
   },
   {
     "category": "installation",
-    "question": "What are the system requirements for installing Docker Engine on Ubuntu?",
-    "ground_truth": "You need a 64-bit version of one of these Ubuntu versions: Ubuntu 24.04, 22.04, 20.04, or 18.04. Docker Engine is compatible with x86_64, amd64, armhf, arm64, and s390x architectures."
+    "question": "What are the system requirements for Docker Desktop on Mac?",
+    "ground_truth": "Docker Desktop for Mac requires a supported version of macOS (the current release and the two previous releases are supported). You need at least 4 GB of RAM. For Apple silicon Macs, Rosetta 2 is recommended but no longer required.",
+    "expected_keywords": ["macOS", "RAM", "4 GB", "Apple silicon", "Rosetta"]
   },
   {
     "category": "installation",
-    "question": "How can I install Docker Compose standalone?",
-    "ground_truth": "You can download the Docker Compose standalone binary directly from the GitHub releases page and place it into a directory in your system PATH, or install it using curl. Ensure you apply executable permissions to the binary."
+    "question": "How do I install Docker Engine on Ubuntu using the apt repository?",
+    "ground_truth": "Set up Docker's apt repository by adding Docker's official GPG key and repository to your apt sources. Then install Docker Engine packages using 'sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin'. Verify the installation by running 'sudo docker run hello-world'.",
+    "expected_keywords": ["apt", "repository", "GPG", "docker-ce", "ubuntu"]
+  },
+  {
+    "category": "installation",
+    "question": "How can I install Docker Compose as a standalone binary?",
+    "ground_truth": "Download the Docker Compose standalone binary from the GitHub releases page. Place the binary in a directory that is in your system PATH, such as /usr/local/bin/. Apply executable permissions using chmod +x. Note that standalone is only supported for backward compatibility and the plugin version is recommended.",
+    "expected_keywords": ["standalone", "binary", "GitHub", "PATH", "chmod"]
   },
   {
     "category": "getting_started",
-    "question": "What is the command to run a basic nginx container?",
-    "ground_truth": "You can run an nginx container in detached mode and publish ports by using the command: docker run -d -p 80:80 --name my-nginx nginx"
+    "question": "How do I run a container in detached mode with a specific port mapping?",
+    "ground_truth": "Use the 'docker run' command with the '-d' flag for detached mode and '-p' flag for port mapping. For example: 'docker run -d -p 80:80 nginx' runs an nginx container in the background and maps port 80 on the host to port 80 in the container.",
+    "expected_keywords": ["docker run", "-d", "-p", "detached", "port"]
   },
   {
     "category": "getting_started",
-    "question": "How do I stop all running containers?",
-    "ground_truth": "To stop all running containers, you first get their IDs with 'docker ps -q' and pass them to the stop command: docker stop $(docker ps -aq)"
+    "question": "What does the 'docker compose up' command do?",
+    "ground_truth": "The 'docker compose up' command builds, creates, starts, and attaches to containers for all services defined in a compose.yml or docker-compose.yml file. Use the '-d' flag to run in detached mode and '--build' to force rebuilding images before starting.",
+    "expected_keywords": ["compose", "up", "services", "build", "start"]
   },
   {
     "category": "getting_started",
-    "question": "What does 'docker compose up' do?",
-    "ground_truth": "The 'docker compose up' command builds, (re)creates, starts, and attaches to containers for a service defined in a compose.yml file."
+    "question": "How do I build a Docker image from a Dockerfile?",
+    "ground_truth": "Use the 'docker build' command with the '-t' flag to tag the image and specify the build context directory. For example: 'docker build -t my-app .' builds an image tagged 'my-app' from the Dockerfile in the current directory.",
+    "expected_keywords": ["docker build", "Dockerfile", "-t", "tag", "image"]
+  },
+  {
+    "category": "getting_started",
+    "question": "How do I view logs from a running container?",
+    "ground_truth": "Use the 'docker logs' command followed by the container name or ID. Use the '-f' or '--follow' flag to stream new log output in real-time. Use '--tail' to show only the last N lines of the log.",
+    "expected_keywords": ["docker logs", "container", "-f", "follow", "tail"]
+  },
+  {
+    "category": "cli_reference",
+    "question": "How do I list all Docker images on my system?",
+    "ground_truth": "Use the 'docker images' or 'docker image ls' command to list all locally available images. This shows the repository, tag, image ID, creation date, and size. Use '--filter' to filter the output or '-q' to show only image IDs.",
+    "expected_keywords": ["docker images", "docker image ls", "list", "repository", "tag"]
+  },
+  {
+    "category": "cli_reference",
+    "question": "How do I remove all stopped containers?",
+    "ground_truth": "Use 'docker container prune' to remove all stopped containers. You can also use 'docker rm $(docker ps -aq)' to remove all containers. Add the '--filter' flag to prune to selectively remove containers based on conditions.",
+    "expected_keywords": ["docker container prune", "docker rm", "stopped", "remove"]
+  },
+  {
+    "category": "cli_reference",
+    "question": "How do I inspect the details of a Docker container?",
+    "ground_truth": "Use 'docker inspect' followed by the container name or ID to view detailed low-level information about the container in JSON format. This includes network settings, volumes, environment variables, and more. Use '--format' or '-f' with Go templates to extract specific fields.",
+    "expected_keywords": ["docker inspect", "JSON", "container", "format", "details"]
+  },
+  {
+    "category": "cli_reference",
+    "question": "How do I copy files between a container and the host?",
+    "ground_truth": "Use 'docker cp' to copy files or directories between a container and the local filesystem. The syntax is 'docker cp [OPTIONS] CONTAINER:SRC_PATH DEST_PATH' to copy from container to host, or 'docker cp [OPTIONS] SRC_PATH CONTAINER:DEST_PATH' to copy from host to container.",
+    "expected_keywords": ["docker cp", "copy", "container", "host", "filesystem"]
   },
   {
     "category": "troubleshooting",
     "question": "What should I do if I get the error 'Unable to connect to the Docker daemon'?",
-    "ground_truth": "This error means the Docker client cannot reach the daemon. Ensure the Docker daemon is actually running. If you are using Docker Desktop for Linux or SDKs, you might need to set the DOCKER_HOST environment variable to point to the correct socket."
+    "ground_truth": "This error means the Docker client cannot communicate with the Docker daemon. Make sure the Docker daemon is running. If using Docker Desktop for Linux, set the DOCKER_HOST environment variable to the correct socket path. Check if the Docker service is started with 'sudo systemctl start docker'.",
+    "expected_keywords": ["daemon", "DOCKER_HOST", "socket", "running", "systemctl"]
   },
   {
     "category": "troubleshooting",
-    "question": "Docker Desktop fails to start after installing anti-virus software on Windows. How do I fix it?",
-    "ground_truth": "Some antivirus software blocks Hyper-V or Docker networking. To resolve this, you should temporarily uninstall the antivirus or add Docker to the exclusions/exceptions list in the antivirus settings."
+    "question": "Docker Desktop fails to start after installing antivirus software. How do I fix it?",
+    "ground_truth": "Some antivirus software is incompatible with Hyper-V or Windows Containers and can cause Docker Desktop to fail to start. As a workaround, uninstall the antivirus software or add Docker to the exclusions/exceptions in your antivirus settings.",
+    "expected_keywords": ["antivirus", "Hyper-V", "incompatible", "exclusions", "workaround"]
   },
   {
     "category": "troubleshooting",
-    "question": "My docker build is extremely slow. How can I speed it up?",
-    "ground_truth": "Store your instruction layers efficiently by putting instructions that change frequently at the end of the Dockerfile. Use .dockerignore to exclude unnecessary files from the build context, and utilize BuildKit caching mechanisms."
+    "question": "How can I speed up slow Docker builds?",
+    "ground_truth": "Optimize Dockerfile layer ordering by placing frequently changing instructions at the end. Use a .dockerignore file to exclude unnecessary files from the build context. Leverage the build cache by not changing commands unnecessarily. Consider using multi-stage builds to reduce image size.",
+    "expected_keywords": ["cache", "Dockerfile", "dockerignore", "layer", "multi-stage"]
   },
   {
-    "category": "out_of_domain",
-    "question": "How do I configure a Kubernetes cluster using Minikube?",
-    "ground_truth": "I'm sorry, but the provided documentation is focused on Docker and does not contain information on how to configure Kubernetes with Minikube."
-  },
-  {
-    "category": "out_of_domain",
-    "question": "Which is better for production, Kubernetes or Docker Swarm?",
-    "ground_truth": "I'm sorry, but this requires subjective comparisons and the provided documentation does not contain a solution to this question."
-  },
-  {
-    "category": "ambiguous",
-    "question": "Docker is not working, it gives an error.",
-    "ground_truth": "I'm sorry, but 'gives an error' is too broad. Please provide the exact error message or context so I can look up the correct troubleshooting steps in the documentation."
-  },
-  {
-    "category": "ambiguous",
-    "question": "How do I update my container?",
-    "ground_truth": "Containers are meant to be ephemeral. To update a container, you generally pull the newer image version and recreate the container using 'docker run' or 'docker compose up' rather than updating it in place."
+    "category": "troubleshooting",
+    "question": "How do I fix 'no space left on device' errors in Docker?",
+    "ground_truth": "Run 'docker system prune' to remove unused containers, networks, images, and optionally volumes. Use 'docker system df' to check disk usage. You can also configure Docker's storage driver or increase the disk space allocated to Docker Desktop in its settings.",
+    "expected_keywords": ["prune", "disk", "space", "docker system df", "storage"]
   },
   {
     "category": "configuration",
-    "question": "How can I change the default bridge network IP range?",
-    "ground_truth": "You can provide a completely custom default network configuration by editing the daemon.json file and adding the 'bip' parameter with your desired subnet, then restarting the Docker daemon."
+    "question": "How do I configure Docker to start on boot on Linux?",
+    "ground_truth": "Most Linux distributions use systemd to manage services. Enable the Docker service to start on boot with 'sudo systemctl enable docker.service' and 'sudo systemctl enable containerd.service'. To disable auto-start, use the 'disable' command instead.",
+    "expected_keywords": ["systemctl", "enable", "boot", "systemd", "service"]
   },
   {
     "category": "configuration",
     "question": "Can I use Docker without sudo privileges on Linux?",
-    "ground_truth": "Yes, you can manage Docker as a non-root user by creating the 'docker' group and adding your user to it using the 'usermod -aG docker $USER' command."
+    "ground_truth": "Yes, create the 'docker' group with 'sudo groupadd docker' and add your user with 'sudo usermod -aG docker $USER'. Log out and back in for the group membership to take effect. Note that the docker group grants root-level privileges to the user.",
+    "expected_keywords": ["groupadd", "usermod", "docker group", "sudo", "root"]
+  },
+  {
+    "category": "configuration",
+    "question": "How do I change the default storage location for Docker data?",
+    "ground_truth": "Edit the Docker daemon configuration file daemon.json (typically at /etc/docker/daemon.json) and set the 'data-root' key to your desired path. Restart the Docker daemon for changes to take effect. You may need to copy existing data to the new location.",
+    "expected_keywords": ["daemon.json", "data-root", "storage", "path", "restart"]
+  },
+  {
+    "category": "configuration",
+    "question": "How can I configure Docker to use a proxy server?",
+    "ground_truth": "Configure the Docker client by setting the HTTP_PROXY, HTTPS_PROXY, and NO_PROXY environment variables. For the Docker daemon, add proxy configuration to the daemon.json file or the systemd service file. For container builds, use build arguments in the Dockerfile.",
+    "expected_keywords": ["proxy", "HTTP_PROXY", "HTTPS_PROXY", "daemon.json", "environment"]
   }
 ]
