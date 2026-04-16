@@ -20,23 +20,22 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 import pandas as pd
 from datasets import Dataset
 from loguru import logger
 
 # ── RAGAS imports ─────────────────────────────────────────────────────
 from ragas import evaluate
-from ragas.metrics import (
-    faithfulness,
-    answer_relevancy,
-    context_precision,
-    context_recall,
-)
-from ragas.llms import LangchainLLMWrapper
+from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall
+from ragas.llms import llm_factory
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.run_config import RunConfig
+from openai import OpenAI
 
-# ── LangChain imports para el juez ────────────────────────────────────
+# ── LangChain imports ─────────────────────────────────────────────────
 from langchain_groq import ChatGroq
 from langchain_ollama import OllamaEmbeddings
 
@@ -84,19 +83,26 @@ def load_dataset(path: str | Path, quick: bool = False) -> list[dict]:
     return data
 
 
-def get_ragas_llm(model_name: str):
-    """Crea el LLM juez para RAGAS usando Groq."""
+def get_ragas_llm():
+    """
+    Crea el LLM juez para RAGAS usando Ollama local vía API OpenAI-compatible.
+    Usa llm_factory (requerido por RAGAS v0.4.x metrics).
+    """
     settings = get_settings()
-    llm = ChatGroq(
-        model_name=model_name,
-        api_key=settings.groq_api_key,
-        temperature=0.0,
+    client = OpenAI(
+        base_url=f"{settings.ollama_base_url}/v1",
+        api_key="ollama",
     )
-    return LangchainLLMWrapper(llm)
+    llm = llm_factory(settings.llm_model, client=client)
+    logger.info(f"Juez RAGAS: Ollama local ({settings.llm_model} en {settings.ollama_base_url})")
+    return llm
 
 
 def get_ragas_embeddings():
-    """Crea los embeddings para RAGAS usando Ollama local."""
+    """
+    Crea los embeddings para RAGAS usando Ollama local.
+    Usa LangchainEmbeddingsWrapper (AnswerRelevancy necesita embed_query).
+    """
     settings = get_settings()
     embeddings = OllamaEmbeddings(
         model=settings.embedding_model,
@@ -171,25 +177,20 @@ def run_pipeline_on_dataset(
     return results
 
 
-def run_ragas_evaluation(
-    data: dict,
-    judge_model: str,
-) -> pd.DataFrame:
+def run_ragas_evaluation(data: dict) -> pd.DataFrame:
     """
     Ejecuta la evaluación RAGAS con los datos recopilados del pipeline.
 
-    Usa RunConfig(max_workers=1) para serializar todas las llamadas al LLM
-    y evitar saturar el rate limit de Groq.
+    El juez es siempre Ollama local (sin rate-limits ni costos).
+    Usa RunConfig(max_workers=1) para serializar llamadas.
 
     Args:
         data: Dict con question, answer, contexts, ground_truth
-        judge_model: Nombre del modelo Groq para el juez RAGAS
 
     Returns:
         DataFrame con scores por pregunta
     """
-    logger.info(f"Iniciando evaluación RAGAS con juez: {judge_model}")
-    logger.info("⚠️  RunConfig: max_workers=1 (serializado para respetar rate-limits)")
+    logger.info("Iniciando evaluación RAGAS con juez LOCAL (Ollama)")
 
     # Preparar dataset RAGAS
     ragas_data = {
@@ -200,30 +201,32 @@ def run_ragas_evaluation(
     }
     ragas_dataset = Dataset.from_dict(ragas_data)
 
-    # Configurar juez
-    evaluator_llm = get_ragas_llm(judge_model)
+    # Configurar juez local (Ollama)
+    evaluator_llm = get_ragas_llm()
     evaluator_embeddings = get_ragas_embeddings()
 
-    # RunConfig ultra-conservador para Groq free tier:
-    # - max_workers=1: Una sola llamada al LLM a la vez (evita rafagas)
-    # - max_retries=15: Reintentos generosos si pega rate-limit
-    # - max_wait=120: Espera hasta 2 min entre retries
-    # - timeout=300: 5 min max por operación
+    # Instanciar métricas con el LLM juez (RAGAS v0.4.x requiere objetos instanciados)
+    metrics = [
+        Faithfulness(llm=evaluator_llm),
+        AnswerRelevancy(llm=evaluator_llm, embeddings=evaluator_embeddings),
+        ContextPrecision(llm=evaluator_llm),
+        ContextRecall(llm=evaluator_llm),
+    ]
+
+    # RunConfig para Ollama local:
+    # - max_workers=1: Serializado (Ollama procesa de a uno)
+    # - timeout=600: 10 min por operación (modelos locales son más lentos)
     run_config = RunConfig(
         max_workers=1,
-        max_retries=15,
-        max_wait=120,
-        timeout=300,
+        max_retries=5,
+        max_wait=60,
+        timeout=600,
     )
 
     # Ejecutar evaluación
-    metrics = [faithfulness, answer_relevancy, context_precision, context_recall]
-
     result = evaluate(
         dataset=ragas_dataset,
         metrics=metrics,
-        llm=evaluator_llm,
-        embeddings=evaluator_embeddings,
         run_config=run_config,
     )
 
@@ -284,12 +287,6 @@ def main():
         help="Modelo Groq a usar como generador (default: llama-3.3-70b-versatile)",
     )
     parser.add_argument(
-        "--judge",
-        type=str,
-        default=None,
-        help="Modelo Groq para el juez RAGAS (default: mismo que --model)",
-    )
-    parser.add_argument(
         "--delay",
         type=int,
         default=DEFAULT_DELAY,
@@ -301,10 +298,9 @@ def main():
         help="Ejecutar solo 10 preguntas (2 por categoría) para testeo rápido",
     )
     args = parser.parse_args()
-    judge_model = args.judge or args.model
 
     logger.info(f"Modelo generador: {args.model}")
-    logger.info(f"Modelo juez RAGAS: {judge_model}")
+    logger.info(f"Juez RAGAS: Ollama local (sin rate-limits)")
     logger.info(f"Delay entre preguntas: {args.delay}s")
     logger.info(f"Modo quick: {args.quick}")
 
@@ -343,7 +339,7 @@ def main():
     logger.info("FASE 2: Evaluación RAGAS (serializada, max_workers=1)")
     logger.info("Esto puede tardar varios minutos. El juez evalúa cada pregunta de a una.")
     logger.info("=" * 50)
-    df = run_ragas_evaluation(data, judge_model)
+    df = run_ragas_evaluation(data)
 
     # 7. Reporte
     print_report(df, args.model, RESULTS_DIR)
