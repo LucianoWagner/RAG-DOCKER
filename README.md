@@ -340,6 +340,15 @@ El sistema soporta preguntas en español, pero internamente opera todo el Pipeli
 2. **Traducción Inicial (Usuario → Sistema)**: Se usa `deep-translator` (Google Translate gratis, 0 tokens) ya que las consultas de los usuarios son texto plano.
 3. **Traducción Final (Sistema → Usuario)**: Se usa el LLM de Groq. Esto garantiza que comandos como `docker run -d nginx` o términos de infraestructura (volumes, containers) no sean destrozados por traductores genéricos.
 
+### Enrutamiento Semántico y Clasificación de Intenciones
+
+El pipeline integra un componente `router.py` encargado de clasificar la intención de la consulta *antes* de realizar operaciones costosas en la base de datos vectorial. 
+
+**Estrategia en Cascada (Zero a Low-Cost):**
+1. **Heurísticas Locales:** Se ejecutan expresiones regulares (Regex) para identificar saludos (`Hola`, `Gracias`) y keywords técnicas (`docker`, `compose`). Es instantáneo y no consume tokens.
+2. **Evaluación LLM (Fallback):** Si la consulta es trivial o ambigua, un modelo LLM evalúa la pregunta usando Few-Shot prompting para definir estrictamente si es `RAG` o `CHITCHAT`.
+3. **Respuesta Directa:** Si la intención es `CHITCHAT`, se elabora dinámicamente un mensaje conversacional amigable saltándose por completo Retriever (ChromaDB), Reranker (FlashRank) y Evidence Checker. Esto provee una respuesta instantánea y ahorra costos computacionales.
+
 ### OpenWebUI y Modelos Disponibles
 
 OpenWebUI cree que está hablando con la API oficial de OpenAI. Tu backend expone el modelo **`docker-rag-assistant`**.

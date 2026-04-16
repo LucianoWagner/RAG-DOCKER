@@ -12,7 +12,7 @@ from langchain_core.documents import Document
 from loguru import logger
 
 from app.config import get_settings
-from app.models import RAGResponse, EvidenceVerdict, RetrievalMetadata
+from app.models import RAGResponse, EvidenceVerdict, EvidenceResult, RetrievalMetadata
 
 
 class RAGPipeline:
@@ -89,26 +89,14 @@ class RAGPipeline:
         Returns:
             RAGResponse con respuesta, citas, evidencia y metadata.
 
-        TODO: Implementar la orquestación:
-
-        1. RETRIEVAL HÍBRIDO
-           retrieved_chunks = hybrid.retrieve(self.hybrid_retriever, question)
-
-        2. RERANKING
-           reranked_chunks = reranker.rerank_documents(question, retrieved_chunks)
-
-        3. EVIDENCE CHECK
-           evidence = evidence_checker.check_evidence(question, reranked_chunks)
-           if evidence.verdict == EvidenceVerdict.INSUFFICIENT:
-               return abstention response
-
-        4. GENERACIÓN
-           context = prompt_templates.format_context(reranked_chunks)
-           messages = prompt_templates.build_messages(question, context)
-           response = generator.generate_response(question, reranked_chunks, evidence, messages)
-
-        5. RETURN
-           return response
+        Flujo:
+            0. Detección de idioma + traducción
+            1. Semantic Router (CHITCHAT → respuesta rápida, RAG → continuar)
+            2. Retrieval Híbrido
+            3. Reranking
+            4. Evidence Check
+            5. Generación
+            6. Traducción de vuelta (si aplica)
         """
         logger.info(f"Pipeline RAG ejecutando | Pregunta dictada: {question[:80]}...")
 
@@ -118,6 +106,7 @@ class RAGPipeline:
         from app.generation.prompt_templates import format_context, build_messages
         from app.generation.generator import generate_response
         from app.generation.translator import detect_spanish, translate_to_english, translate_to_spanish
+        from app.generation.router import route_query, get_chitchat_response
 
         # 0. DETECCIÓN Y TRADUCCIÓN DE IDIOMA
         is_spanish = detect_spanish(self.llm, question)
@@ -127,13 +116,40 @@ class RAGPipeline:
             question = translate_to_english(self.llm, question)
             logger.info(f"Pregunta traducida al inglés para procesamiento: {question}")
 
-        # 1. RETRIEVAL HÍBRIDO
+        # 1. SEMANTIC ROUTER — Clasificar la intención antes de buscar
+        intent = route_query(self.llm, question)
+
+        if intent == "CHITCHAT":
+            logger.info("🚦 Ruta CHITCHAT: Generando respuesta conversacional (sin retrieval)")
+            # Generar respuesta usando la pregunta original (en su idioma)
+            chitchat_answer = get_chitchat_response(self.llm, original_question)
+
+            return RAGResponse(
+                answer=chitchat_answer,
+                sources=[],
+                evidence=EvidenceResult(
+                    verdict=EvidenceVerdict.SUFFICIENT,
+                    top_score=1.0,
+                    relevant_count=0,
+                    details="Chit-chat: no se requiere búsqueda en documentación.",
+                ),
+                retrieval_metadata=RetrievalMetadata(
+                    question=original_question,
+                    original_question=original_question,
+                    translated_question=question if is_spanish else None,
+                    chunks_used=0,
+                    status="chit-chat",
+                ),
+            )
+
+        # 2. RETRIEVAL HÍBRIDO (solo si intent == "RAG")
+        logger.info("🚦 Ruta RAG: Ejecutando pipeline completo")
         retrieved_chunks = retrieve(self.hybrid_retriever, question) if self.bm25_retriever else self.hybrid_retriever.invoke(question)
 
-        # 2. RERANKING
+        # 3. RERANKING
         reranked_chunks = rerank_documents(question, retrieved_chunks)
 
-        # 3. EVIDENCE CHECK
+        # 4. EVIDENCE CHECK
         evidence = check_evidence(question, reranked_chunks)
         if evidence.verdict == EvidenceVerdict.INSUFFICIENT:
             logger.warning("Evidencia insuficiente. Resolviendo con abstención programada.")
@@ -155,13 +171,13 @@ class RAGPipeline:
                 ),
             )
 
-        # 4. GENERACIÓN
+        # 5. GENERACIÓN
         logger.info("Evidencia validada. Formateando contexto y delegando al LLM...")
         context = format_context(reranked_chunks)
         messages = build_messages(question, context)
         response = generate_response(question, reranked_chunks, evidence, messages, llm=self.llm)
 
-        # 5. TRADUCCIÓN DE LA RESPUESTA
+        # 6. TRADUCCIÓN DE LA RESPUESTA
         if is_spanish:
             logger.info("Traduciendo respuesta final de vuelta al español...")
             response.answer = translate_to_spanish(self.llm, response.answer)
@@ -170,5 +186,5 @@ class RAGPipeline:
         response.retrieval_metadata.original_question = original_question
         response.retrieval_metadata.question = original_question
 
-        # 6. RETURN
+        # 7. RETURN
         return response
