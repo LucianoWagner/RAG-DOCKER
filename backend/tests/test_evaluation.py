@@ -50,6 +50,7 @@ from app.pipeline import RAGPipeline
 
 EVAL_DATASET_PATH = Path(__file__).parent / "eval_dataset.json"
 RESULTS_DIR = Path(__file__).parent
+COLLECTED_DIR = RESULTS_DIR / "eval_runs"
 DEFAULT_DELAY = 15  # segundos entre preguntas para respetar rate limits
 
 # Categorías para --quick (2 preguntas por categoría = 10 total)
@@ -83,18 +84,31 @@ def load_dataset(path: str | Path, quick: bool = False) -> list[dict]:
     return data
 
 
-def get_ragas_llm():
+def get_ragas_llm(provider: str = "ollama", model_name: str | None = None):
     """
     Crea el LLM juez para RAGAS usando Ollama local vía API OpenAI-compatible.
     Usa llm_factory (requerido por RAGAS v0.4.x metrics).
     """
     settings = get_settings()
-    client = OpenAI(
-        base_url=f"{settings.ollama_base_url}/v1",
-        api_key="ollama",
-    )
-    llm = llm_factory(settings.llm_model, client=client)
-    logger.info(f"Juez RAGAS: Ollama local ({settings.llm_model} en {settings.ollama_base_url})")
+
+    if provider == "groq":
+        if not settings.groq_api_key:
+            raise ValueError("GROQ_API_KEY no encontrada. Agregala a tu archivo .env")
+        judge_model = model_name or "llama-3.1-8b-instant"
+        client = OpenAI(
+            base_url="https://api.groq.com/openai/v1",
+            api_key=settings.groq_api_key,
+        )
+        logger.info(f"Juez RAGAS: Groq ({judge_model})")
+    else:
+        judge_model = model_name or settings.llm_model
+        client = OpenAI(
+            base_url=f"{settings.ollama_base_url}/v1",
+            api_key="ollama",
+        )
+        logger.info(f"Juez RAGAS: Ollama local ({judge_model} en {settings.ollama_base_url})")
+
+    llm = llm_factory(judge_model, client=client)
     return llm
 
 
@@ -177,7 +191,76 @@ def run_pipeline_on_dataset(
     return results
 
 
-def run_ragas_evaluation(data: dict) -> pd.DataFrame:
+def save_collected_data(
+    data: dict,
+    model_name: str,
+    output_path: str | Path | None = None,
+    quick: bool = False,
+) -> Path:
+    """Guarda respuestas y contextos ya generados para evaluar RAGAS luego."""
+    COLLECTED_DIR.mkdir(parents=True, exist_ok=True)
+
+    if output_path is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        safe_model = model_name.replace(".", "_").replace("-", "_")
+        mode = "quick" if quick else "full"
+        output_path = COLLECTED_DIR / f"collected_{safe_model}_{mode}_{timestamp}.json"
+    else:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    payload = {
+        "metadata": {
+            "generator_model": model_name,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "items": len(data.get("question", [])),
+            "quick": quick,
+        },
+        "data": data,
+    }
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    logger.info(f"Datos de evaluacion guardados en: {output_path}")
+    return output_path
+
+
+def load_collected_data(input_path: str | Path) -> dict:
+    """Carga un JSON generado por --phase collect."""
+    with open(input_path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    if "data" in payload:
+        logger.info(f"Cargando datos pre-generados: {input_path}")
+        logger.info(f"Metadata: {payload.get('metadata', {})}")
+        return payload["data"]
+
+    return payload
+
+
+def _evaluate_ragas_dataset(
+    ragas_dataset: Dataset,
+    metrics: list,
+    run_config: RunConfig,
+) -> pd.DataFrame:
+    result = evaluate(
+        dataset=ragas_dataset,
+        metrics=metrics,
+        run_config=run_config,
+    )
+    return result.to_pandas()
+
+
+def run_ragas_evaluation(
+    data: dict,
+    judge_provider: str = "ollama",
+    judge_model: str | None = None,
+    ragas_row_delay: int = 0,
+    max_retries: int = 5,
+    max_wait: int = 60,
+    timeout: int = 600,
+) -> pd.DataFrame:
     """
     Ejecuta la evaluación RAGAS con los datos recopilados del pipeline.
 
@@ -235,6 +318,67 @@ def run_ragas_evaluation(data: dict) -> pd.DataFrame:
     df["category"] = data["category"]
     df["latency"] = data["latency"]
 
+    return df
+
+
+def run_ragas_evaluation(
+    data: dict,
+    judge_provider: str = "ollama",
+    judge_model: str | None = None,
+    ragas_row_delay: int = 0,
+    max_retries: int = 5,
+    max_wait: int = 60,
+    timeout: int = 600,
+) -> pd.DataFrame:
+    """Ejecuta RAGAS con juez local o Groq. Esta definicion pisa la legacy."""
+    logger.info(f"Iniciando evaluacion RAGAS | juez={judge_provider} | modelo={judge_model or 'default'}")
+
+    ragas_data = {
+        "question": data["question"],
+        "answer": data["answer"],
+        "contexts": data["contexts"],
+        "ground_truth": data["ground_truth"],
+    }
+    ragas_dataset = Dataset.from_dict(ragas_data)
+
+    evaluator_llm = get_ragas_llm(judge_provider, judge_model)
+    evaluator_embeddings = get_ragas_embeddings()
+
+    metrics = [
+        Faithfulness(llm=evaluator_llm),
+        AnswerRelevancy(llm=evaluator_llm, embeddings=evaluator_embeddings),
+        ContextPrecision(llm=evaluator_llm),
+        ContextRecall(llm=evaluator_llm),
+    ]
+
+    run_config = RunConfig(
+        max_workers=1,
+        max_retries=max_retries,
+        max_wait=max_wait,
+        timeout=timeout,
+    )
+
+    if ragas_row_delay > 0:
+        logger.info(f"Evaluando RAGAS fila por fila con pausa de {ragas_row_delay}s")
+        frames = []
+        total = len(data["question"])
+        for i in range(total):
+            logger.info(f"RAGAS [{i + 1}/{total}]")
+            row_dataset = ragas_dataset.select([i])
+            row_df = _evaluate_ragas_dataset(row_dataset, metrics, run_config)
+            row_df["category"] = [data["category"][i]]
+            row_df["latency"] = [data["latency"][i]]
+            frames.append(row_df)
+
+            if i < total - 1:
+                logger.info(f"Esperando {ragas_row_delay}s antes de la siguiente fila RAGAS...")
+                time.sleep(ragas_row_delay)
+
+        return pd.concat(frames, ignore_index=True)
+
+    df = _evaluate_ragas_dataset(ragas_dataset, metrics, run_config)
+    df["category"] = data["category"]
+    df["latency"] = data["latency"]
     return df
 
 
@@ -343,6 +487,137 @@ def main():
 
     # 7. Reporte
     print_report(df, args.model, RESULTS_DIR)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Evaluacion RAGAS del pipeline RAG")
+    parser.add_argument(
+        "--phase",
+        choices=["all", "collect", "evaluate"],
+        default="all",
+        help="all: genera y evalua; collect: solo guarda respuestas/contextos; evaluate: evalua un JSON guardado",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="llama-3.3-70b-versatile",
+        help="Modelo Groq a usar como generador",
+    )
+    parser.add_argument(
+        "--delay",
+        type=int,
+        default=DEFAULT_DELAY,
+        help=f"Segundos de espera entre preguntas del pipeline (default: {DEFAULT_DELAY})",
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Ejecutar solo 10 preguntas (2 por categoria)",
+    )
+    parser.add_argument(
+        "--output-json",
+        type=str,
+        default=None,
+        help="Ruta donde guardar el JSON de --phase collect",
+    )
+    parser.add_argument(
+        "--input-json",
+        type=str,
+        default=None,
+        help="JSON generado por --phase collect para evaluar luego",
+    )
+    parser.add_argument(
+        "--judge-provider",
+        choices=["ollama", "groq"],
+        default="ollama",
+        help="Proveedor del juez RAGAS",
+    )
+    parser.add_argument(
+        "--judge-model",
+        type=str,
+        default=None,
+        help="Modelo del juez RAGAS. Para Groq, sugerido: llama-3.1-8b-instant",
+    )
+    parser.add_argument(
+        "--ragas-row-delay",
+        type=int,
+        default=0,
+        help="Si >0, evalua RAGAS una pregunta por vez y espera N segundos entre filas",
+    )
+    parser.add_argument(
+        "--ragas-max-wait",
+        type=int,
+        default=60,
+        help="Espera maxima entre reintentos de RAGAS",
+    )
+    parser.add_argument(
+        "--ragas-timeout",
+        type=int,
+        default=600,
+        help="Timeout por operacion de RAGAS",
+    )
+    args = parser.parse_args()
+
+    logger.info(f"Fase: {args.phase}")
+    logger.info(f"Modelo generador: {args.model}")
+    logger.info(f"Juez RAGAS: {args.judge_provider} ({args.judge_model or 'default'})")
+    logger.info(f"Delay entre preguntas: {args.delay}s")
+    logger.info(f"Modo quick: {args.quick}")
+
+    if args.phase == "evaluate":
+        if not args.input_json:
+            raise ValueError("--phase evaluate requiere --input-json")
+        data = load_collected_data(args.input_json)
+        report_model_name = f"{args.model}_judge_{args.judge_provider}_{args.judge_model or 'default'}"
+    else:
+        dataset = load_dataset(EVAL_DATASET_PATH, quick=args.quick)
+        logger.info(f"Dataset cargado: {len(dataset)} preguntas")
+
+        import app.generation.generator as gen_module
+        original_get_llm = gen_module.get_llm
+
+        def patched_get_llm():
+            settings = get_settings()
+            return ChatGroq(
+                model_name=args.model,
+                api_key=settings.groq_api_key,
+                temperature=0.0,
+            )
+
+        gen_module.get_llm = patched_get_llm
+        try:
+            logger.info("Inicializando RAG Pipeline...")
+            pipeline = RAGPipeline()
+            logger.info("Ejecutando pipeline sobre dataset de evaluacion...")
+            data = run_pipeline_on_dataset(pipeline, dataset, delay=args.delay)
+        finally:
+            gen_module.get_llm = original_get_llm
+
+        collected_path = save_collected_data(
+            data,
+            args.model,
+            output_path=args.output_json,
+            quick=args.quick,
+        )
+        logger.info(f"JSON disponible para evaluar luego: {collected_path}")
+        report_model_name = args.model
+
+        if args.phase == "collect":
+            return
+
+    logger.info("=" * 50)
+    logger.info("FASE 2: Evaluacion RAGAS")
+    logger.info("=" * 50)
+    df = run_ragas_evaluation(
+        data,
+        judge_provider=args.judge_provider,
+        judge_model=args.judge_model,
+        ragas_row_delay=args.ragas_row_delay,
+        max_wait=args.ragas_max_wait,
+        timeout=args.ragas_timeout,
+    )
+
+    print_report(df, report_model_name, RESULTS_DIR)
 
 
 if __name__ == "__main__":
